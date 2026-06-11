@@ -1,0 +1,23 @@
+# Pastas de Compilação e Cache do CMake
+build/
+.cmake/
+CMakePresets.json
+
+# Arquivos gerados pelo compilador (Visual Studio)
+*.obj
+*.exe
+*.pdb
+*.ilk
+*.lib
+*.idb
+
+# Arquivos de controle local do nosso script de build
+Release/v.txt
+
+# Arquivos temporários do VS Code ou Visual Studio IDE
+.vs/
+.vscode/
+*.sln
+*.vcxproj
+*.filters
+*.user
