@@ -1,0 +1,271 @@
+name: RapidDesk CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  pull_request:
+    branches: [main, develop]
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  # --- Windows Build ---
+  build-windows:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Cache Conan packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.conan2
+          key: ${{ runner.os }}-conan-${{ hashFiles('conanfile.py') }}
+          restore-keys: |
+            ${{ runner.os }}-conan-
+
+      - name: Install dependencies
+        run: |
+          choco install conan -y
+          choco install ninja -y
+          pip install cmake>=3.25
+
+      - name: Configure Conan
+        run: |
+          conan profile detect --force
+          conan install . --build=missing -s build_type=${{ env.BUILD_TYPE }} -s compiler.cppstd=20
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -S . -G Ninja `
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
+            -DCMAKE_TOOLCHAIN_FILE=build/generators/conan_toolchain.cmake `
+            -DRAPIDDESK_BUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
+
+      - name: Test
+        working-directory: build
+        run: ctest -C ${{ env.BUILD_TYPE }} --output-on-failure --parallel 4
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rapiddesk-windows
+          path: |
+            build/src/rapiddesk.exe
+            build/src/*.dll
+          retention-days: 7
+
+  # --- Linux Build ---
+  build-linux:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    strategy:
+      matrix:
+        compiler: [gcc-12, clang-16]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            ninja-build \
+            pkg-config \
+            libx11-dev \
+            libxext-dev \
+            libxfixes-dev \
+            libxi-dev \
+            libxinerama-dev \
+            libxcursor-dev \
+            libxrandr-dev \
+            libssl-dev \
+            libva-dev \
+            libvdpau-dev \
+            libdrm-dev \
+            libpulse-dev \
+            libasound2-dev \
+            libudev-dev \
+            libpipewire-0.3-dev \
+            qt6-base-dev \
+            qt6-base-dev-tools \
+            libavcodec-dev \
+            libavformat-dev \
+            libavutil-dev \
+            libswscale-dev \
+            nvidia-cuda-toolkit
+
+      - name: Install Conan
+        run: |
+          pip install conan>=2.0
+          conan profile detect --force
+
+      - name: Cache Conan
+        uses: actions/cache@v3
+        with:
+          path: ~/.conan2
+          key: ${{ runner.os }}-${{ matrix.compiler }}-conan-${{ hashFiles('conanfile.py') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.compiler }}-conan-
+
+      - name: Configure
+        run: |
+          conan install . --build=missing \
+            -s build_type=${{ env.BUILD_TYPE }} \
+            -s compiler.cppstd=20 \
+            -s compiler=${{ matrix.compiler == 'gcc-12' && 'gcc' || 'clang' }} \
+            -s compiler.version=${{ matrix.compiler == 'gcc-12' && '12' || '16' }}
+
+          cmake -B build -S . -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_TOOLCHAIN_FILE=build/generators/conan_toolchain.cmake \
+            -DRAPIDDESK_BUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build --parallel $(nproc)
+
+      - name: Test
+        working-directory: build
+        run: ctest --output-on-failure --parallel $(nproc)
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rapiddesk-linux-${{ matrix.compiler }}
+          path: |
+            build/src/rapiddesk
+          retention-days: 7
+
+  # --- macOS Build ---
+  build-macos:
+    runs-on: macos-14
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          brew install \
+            cmake \
+            ninja \
+            conan \
+            qt@6 \
+            ffmpeg \
+            openssl \
+            pkg-config
+
+      - name: Cache Conan
+        uses: actions/cache@v3
+        with:
+          path: ~/.conan2
+          key: ${{ runner.os }}-conan-${{ hashFiles('conanfile.py') }}
+          restore-keys: |
+            ${{ runner.os }}-conan-
+
+      - name: Configure
+        run: |
+          conan profile detect --force
+          conan install . --build=missing \
+            -s build_type=${{ env.BUILD_TYPE }} \
+            -s compiler.cppstd=20 \
+            -s compiler=apple-clang \
+            -s compiler.version=15
+
+          cmake -B build -S . -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_TOOLCHAIN_FILE=build/generators/conan_toolchain.cmake \
+            -DRAPIDDESK_BUILD_TESTS=ON \
+            -DQt6_DIR=$(brew --prefix qt@6)/lib/cmake/Qt6
+
+      - name: Build
+        run: cmake --build build --parallel $(sysctl -n hw.ncpu)
+
+      - name: Test
+        working-directory: build
+        run: ctest --output-on-failure --parallel $(sysctl -n hw.ncpu)
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rapiddesk-macos
+          path: |
+            build/src/rapiddesk.app
+          retention-days: 7
+
+  # --- Server Build & Test ---
+  build-server:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: server/signaling/package-lock.json
+
+      - name: Install dependencies
+        working-directory: server/signaling
+        run: npm ci
+
+      - name: Lint
+        working-directory: server/signaling
+        run: npx eslint server.js
+
+      - name: Test
+        working-directory: server/signaling
+        run: npm test
+
+      - name: Build Docker image
+        working-directory: server/signaling
+        run: |
+          docker build -t rapiddesk-signaling:${{ github.sha }} .
+
+      - name: Scan image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: rapiddesk-signaling:${{ github.sha }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+  # --- Code Quality ---
+  code-quality:
+    runs-on: ubuntu-22.04
+    needs: [build-windows, build-linux, build-macos]
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clang-Tidy
+        run: |
+          sudo apt-get install -y clang-tidy
+          find src -name "*.cpp" -exec clang-tidy {} \; || true
+
+      - name: Code coverage (Linux GCC)
+        uses: actions/download-artifact@v4
+        with:
+          name: rapiddesk-linux-gcc-12
+
+      # Coverage report would be generated from test artifacts
