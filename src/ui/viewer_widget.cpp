@@ -39,12 +39,7 @@ namespace rapiddesk::ui {
 
         // Convert BGRA to RGBA for QImage if needed
         // QImage::Format_ARGB32 uses BGRA on little-endian, so direct mapping works
-        QImage new_frame(
-            const_cast<uchar*>(frame.rgba_data.data()),
-            static_cast<int>(frame.width),
-            static_cast<int>(frame.height),
-            static_cast<int>(frame.width * 4),
-            QImage::Format_ARGB32);
+        QImage image(frame.width, frame.height, QImage::Format_ARGB32);
 
         // Deep copy since frame data is ephemeral
         current_frame_ = new_frame.copy();
@@ -87,7 +82,7 @@ namespace rapiddesk::ui {
         }
 
         // Draw frame with optional rounded corners for enterprise feel
-        painter.drawImage(target_rect, current_frame_, current_frame_.rect(), mode);
+        painter.drawImage(target_rect, image, source_rect);
 
         // Draw subtle border around frame
         painter.setPen(QPen(QColor("#30363D"), 1));

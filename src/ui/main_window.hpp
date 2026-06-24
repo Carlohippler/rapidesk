@@ -15,6 +15,11 @@ class QCloseEvent;
 class QResizeEvent;
 class QKeyEvent;
 
+namespace rapiddesk::ui {
+    class HostPage;
+    class ViewerWidget;  // se também der erro
+}
+
 namespace rapiddesk::core {
     class Session;
 }
