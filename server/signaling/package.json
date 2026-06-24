@@ -1,7 +1,7 @@
 {
   "name": "rapiddesk-signaling",
   "version": "1.0.0",
-  "description": "RapidDesk thin signaling server — WebSocket/TLS bootstrap for P2P connections",
+  "description": "RapidDesk thin signaling server ï¿½ WebSocket/TLS bootstrap for P2P connections",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

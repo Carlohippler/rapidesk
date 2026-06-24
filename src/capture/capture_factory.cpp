@@ -1,6 +1,7 @@
 // capture_factory.cpp
 #include "capture_factory.hpp"
 #include "dxgi_capture.hpp"
+#include "capture/dxgi_capture.hpp"
 
 namespace rapiddesk::capture {
 

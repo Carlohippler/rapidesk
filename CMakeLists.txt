@@ -1,6 +1,15 @@
 cmake_minimum_required(VERSION 3.25)
 project(RapidDesk VERSION 1.0.0 LANGUAGES CXX)
 
+# ===== FORÇAR APENAS A CONFIGURAÇÃO RELEASE =====
+set(CMAKE_CONFIGURATION_TYPES "Release" CACHE STRING "" FORCE)
+
+# ===== DESABILITAR VCPKG =====
+set(CMAKE_TOOLCHAIN_FILE "" CACHE STRING "" FORCE)
+
+cmake_minimum_required(VERSION 3.25)
+project(RapidDesk VERSION 1.0.0 LANGUAGES CXX)
+
 # ===== DESABILITAR VCPKG =====
 set(CMAKE_TOOLCHAIN_FILE "" CACHE STRING "" FORCE)
 set(VCPKG_TOOLCHAIN "" CACHE STRING "" FORCE)
@@ -35,8 +44,12 @@ endif()
 # Find packages
 find_package(Qt6 REQUIRED COMPONENTS Core Widgets Network)
 find_package(OpenSSL REQUIRED)
-find_package(FFmpeg REQUIRED COMPONENTS avcodec avutil swscale)
+#find_package(FFmpeg REQUIRED COMPONENTS avcodec avutil swscale)
 find_package(Boost REQUIRED COMPONENTS asio)
+
+if(NOT TARGET Boost::asio)
+    add_library(Boost::asio ALIAS Boost::boost)
+endif()
 
 # Conan integration
 if(EXISTS "${CMAKE_BINARY_DIR}/generators/conan_toolchain.cmake")
@@ -44,11 +57,22 @@ if(EXISTS "${CMAKE_BINARY_DIR}/generators/conan_toolchain.cmake")
 endif()
 
 # NVENC headers (usually in CUDA toolkit or standalone)
+# NVENC headers - opcional (apenas para hardware encoding)
 find_path(NVENC_INCLUDE_DIR nvEncodeAPI.h
     PATHS 
         "$ENV{CUDA_PATH}/include"
         "$ENV{NVENCODE_SDK_DIR}/Interface"
-    DOC "NVENC API headers")
+        "$ENV{CUDA_PATH}/v12.0/include"
+        "$ENV{CUDA_PATH}/v11.8/include"
+        "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.0/include"
+        "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.8/include"
+    DOC "NVENC API headers"
+    NO_DEFAULT_PATH)
+
+if(NOT NVENC_INCLUDE_DIR)
+    message(WARNING "NVENC headers nao encontrados. Hardware encoding sera desabilitado.")
+    set(NVENC_INCLUDE_DIR "")
+endif()
 
 # Source files — Windows only
 set(CORE_SOURCES
@@ -77,8 +101,8 @@ set(CAPTURE_SOURCES
 set(CODEC_SOURCES
     src/codec/encoder_factory.cpp
     src/codec/nvenc_encoder.cpp
-    src/codec/ffmpeg_encoder.cpp
-    src/codec/ffmpeg_decoder.cpp
+    #src/codec/ffmpeg_encoder.cpp
+    #src/codec/ffmpeg_decoder.cpp
 )
 
 set(INPUT_SOURCES
@@ -106,19 +130,24 @@ add_executable(rapiddesk WIN32
 
 target_include_directories(rapiddesk PRIVATE
     ${CMAKE_SOURCE_DIR}/src
-    ${NVENC_INCLUDE_DIR}
 )
 
+if(NVENC_INCLUDE_DIR)
+    target_include_directories(rapiddesk PRIVATE ${NVENC_INCLUDE_DIR})
+    target_compile_definitions(rapiddesk PRIVATE RAPIDDESK_NVENC_ENABLED)
+endif()
+
 target_link_libraries(rapiddesk PRIVATE
+    Qt6::Core
     Qt6::Core
     Qt6::Widgets
     Qt6::Network
     OpenSSL::SSL
     OpenSSL::Crypto
-    FFmpeg::avcodec
-    FFmpeg::avutil
-    FFmpeg::swscale
-    Boost::asio
+    #FFmpeg::avcodec
+    #FFmpeg::avutil
+    #FFmpeg::swscale
+    Boost::boost
     d3d11
     dxgi
     user32

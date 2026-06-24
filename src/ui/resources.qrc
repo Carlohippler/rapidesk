@@ -1,0 +1,20 @@
+<RCC>
+    <qresource prefix="/styles">
+        <file>dark_theme.qss</file>
+    </qresource>
+    <qresource prefix="/icons">
+        <file>app-icon.png</file>
+        <file>tray.png</file>
+        <file>check.svg</file>
+        <file>close.svg</file>
+        <file>float.svg</file>
+    </qresource>
+    <qresource prefix="/fonts">
+        <file>Inter-Regular.ttf</file>
+        <file>Inter-Medium.ttf</file>
+        <file>Inter-SemiBold.ttf</file>
+        <file>Inter-Bold.ttf</file>
+        <file>JetBrainsMono-Regular.ttf</file>
+        <file>JetBrainsMono-Bold.ttf</file>
+    </qresource>
+</RCC>
